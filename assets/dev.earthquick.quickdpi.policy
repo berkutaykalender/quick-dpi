@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>EarthQuick</vendor>
+  <action id="dev.earthquick.quickdpi.engine">
+    <description>Run the QuickDPI packet engine</description>
+    <description xml:lang="tr">QuickDPI paket motorunu çalıştır</description>
+    <message>QuickDPI needs to process network packets</message>
+    <message xml:lang="tr">QuickDPI ağ paketlerini işlemek için izin istiyor</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/quickdpi</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">--engine</annotate>
+  </action>
+</policyconfig>

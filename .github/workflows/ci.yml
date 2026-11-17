@@ -1,0 +1,100 @@
+name: ci
+
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          PACKAGES=""; . ci/toolchain.sh
+          cargo test --release
+
+  build:
+    needs: test
+    strategy:
+      matrix:
+        platform: [linux, windows]
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh ci/build-${{ matrix.platform }}.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: dist
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: APK
+        env:
+          QUICKDPI_KEYSTORE_B64: ${{ secrets.QUICKDPI_KEYSTORE_B64 }}
+          QUICKDPI_KEYSTORE_PASS: ${{ secrets.QUICKDPI_KEYSTORE_PASS }}
+          QUICKDPI_KEY_ALIAS: ${{ secrets.QUICKDPI_KEY_ALIAS }}
+        run: |
+          sh ci/build-android.sh
+          if [ "$GITHUB_REF" = "refs/heads/main" ] && [ -z "$QUICKDPI_KEYSTORE_B64" ]; then
+            echo "::warning::Yayın imzası tanımlı değil; APK sürüme eklenmeyecek."
+            rm -f dist/quickdpi-android.apk
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: dist
+          if-no-files-found: ignore
+
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: [build, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: v<Cargo sürümü> yayınla
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          if gh release view "v$version" > /dev/null 2>&1; then
+            gh release delete "v$version" --cleanup-tag --yes || true
+          fi
+          (cd dist && sha256sum * > SHA256SUMS)
+          cat > notes.md <<EOF
+          QuickDPI $version — Windows, Linux ve Android.
+
+          | Platform | Dosya |
+          |---|---|
+          | Windows 10/11 | \`quickdpi-windows-x86_64.exe\` (yönetici izni ister) |
+          | Linux (Debian/Ubuntu) | \`quickdpi_amd64.deb\` |
+          | Linux (diğer) | \`quickdpi-linux-x86_64.tar.gz\` |
+          | Android 10+ | \`quickdpi-android.apk\` |
+
+          Uygulama yeni sürümleri kendisi denetler. Dosyaları doğrulamak için: \`sha256sum -c SHA256SUMS\`.
+          Site: https://quick-dpi.earthquick.dev
+          EOF
+          gh release create "v$version" dist/* --target "$GITHUB_SHA" --title "QuickDPI $version" --notes-file notes.md

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=QuickDPI
+GenericName=Network Security
+Comment=Ağ güvenliği ve bağlantı koruması
+Comment[en]=Network security and connection protection
+Exec=quickdpi
+Icon=quickdpi
+Terminal=false
+Categories=Network;Utility;
+StartupWMClass=quickdpi
